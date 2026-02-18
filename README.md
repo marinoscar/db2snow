@@ -19,16 +19,14 @@ CLI tool for migrating PostgreSQL databases to Snowflake. Interactively map sche
 
 ## Installation
 
-### From source
-
 ```bash
-git clone <repo-url>
+git clone https://github.com/marinoscar/PGtoSnowflake.git
 cd PGtoSnowflake
 npm install
 npm run build
 ```
 
-Then run directly:
+Run directly:
 
 ```bash
 node dist/index.js
@@ -129,6 +127,33 @@ pgtosnowflake generate-ddl --mapping my-project --preview
 | `-o, --output <file>` | Output SQL file path |
 | `--preview` | Print DDL to stdout |
 
+## Type Mapping
+
+The tool maps 30+ PostgreSQL types to their Snowflake equivalents:
+
+| PostgreSQL | Snowflake | Notes |
+|------------|-----------|-------|
+| `int2` / `smallint` | `SMALLINT` | |
+| `int4` / `serial` | `INTEGER` | serial becomes `IDENTITY(1,1)` |
+| `int8` / `bigserial` | `BIGINT` | bigserial becomes `IDENTITY(1,1)` |
+| `numeric(p,s)` | `NUMBER(p,s)` | Precision preserved |
+| `float4` / `real` | `FLOAT` | |
+| `float8` / `double precision` | `DOUBLE` | |
+| `varchar(n)` | `VARCHAR(n)` | |
+| `text` | `VARCHAR` | No length limit |
+| `char(n)` | `CHAR(n)` | |
+| `boolean` | `BOOLEAN` | |
+| `date` | `DATE` | |
+| `timestamp` | `TIMESTAMP_NTZ` | |
+| `timestamptz` | `TIMESTAMP_TZ` | |
+| `json` / `jsonb` | `VARIANT` | |
+| `bytea` | `BINARY` | |
+| `uuid` | `VARCHAR(36)` | |
+| `interval` | `VARCHAR` | No Snowflake equivalent |
+| `inet` / `cidr` | `VARCHAR(45)` / `VARCHAR(49)` | |
+| Array types (`_int4`, etc.) | `ARRAY` | Comment notes base type |
+| User-defined / enum | `VARCHAR` | Comment notes original type |
+
 ## Configuration
 
 The `.pgtosnowflake/` directory contains:
@@ -141,6 +166,40 @@ The `.pgtosnowflake/` directory contains:
 ```
 
 Config is resolved in order: local (`./.pgtosnowflake/`) then global (`~/.pgtosnowflake/`).
+
+**Important:** The `key` file contains your encryption key. Do not commit it to version control. If using local config, add `.pgtosnowflake/` to your `.gitignore` (already included by default).
+
+## Project Structure
+
+```
+src/
+  index.ts                          # Entry point (CLI + REPL)
+  repl.ts                           # Interactive REPL session
+  constants.ts                      # App-wide constants
+  types/                            # TypeScript interfaces
+    config.ts, postgres.ts, mapping.ts, snowflake.ts, export.ts
+  services/                         # Core business logic
+    encryption.service.ts           # AES-256-GCM encrypt/decrypt
+    config.service.ts               # Config directory + key management
+    postgres.service.ts             # PG connection + schema introspection
+    mapping.service.ts              # Mapping file read/write
+    type-mapper.service.ts          # PG -> Snowflake type mapping
+    ddl-generator.service.ts        # Snowflake DDL generation
+    duckdb-export.service.ts        # DuckDB-based Parquet/CSV export
+  commands/                         # CLI command handlers
+    init.command.ts, map.command.ts, export.command.ts, generate-ddl.command.ts
+  ui/                               # Terminal UI (chalk, ora, boxen, cli-table3)
+    theme.ts, spinner.ts, prompts.ts, logger.ts, display.ts
+  utils/                            # Helpers
+    error.ts, file.ts, validation.ts, pg-queries.ts, log-file.ts
+tests/
+  services/                         # Unit tests for services
+  utils/                            # Unit tests for utilities
+  fixtures/                         # Sample data
+docs/
+  COMMANDS.md                       # Detailed command reference
+  TROUBLESHOOTING.md                # Troubleshooting guide
+```
 
 ## Troubleshooting
 

@@ -10,8 +10,9 @@ Run `pgtosnowflake` with no arguments to launch the interactive menu:
   2. Map PostgreSQL schema      Connect to PostgreSQL and create a schema mapping
   3. Export data                Export table data to Parquet or CSV via DuckDB
   4. Generate Snowflake DDL     Generate Snowflake DDL from a mapping file
-  5. Toggle verbose (OFF)       Enable/disable debug logging to console
-  6. Exit                       Exit the application
+  5. Upload to S3               Upload exported files to an S3 bucket
+  6. Toggle verbose (OFF)       Enable/disable debug logging to console
+  7. Exit                       Exit the application
 ```
 
 Use arrow keys to navigate, or type a number to jump to an option. Press Enter to select.
@@ -144,6 +145,52 @@ Reads a mapping file and generates Snowflake-compatible DDL.
 - `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY` after all tables
 - Column comments for unmapped or special types
 - Header comment noting Snowflake's declarative constraint behavior
+
+## Upload to S3
+
+Uploads exported Parquet/CSV files to an AWS S3 bucket with multipart upload support and progress tracking.
+
+### Flow
+
+1. Verify config has been initialized
+2. Check for AWS credentials — if not configured, offer to set them up inline
+3. Prompt for S3 bucket name (validated against S3 naming rules)
+4. Verify bucket exists and is accessible (HeadBucket check)
+5. Prompt for export directory (default: `./export`)
+6. Scan for `.parquet` and `.csv` files, display file list with sizes
+7. Choose to upload all files or select specific files via checkbox
+8. Prompt for S3 key prefix (default: export directory name)
+9. Upload files with per-file and overall progress bars
+10. Display summary table with upload results
+
+### S3 Key Structure
+
+Files are uploaded with keys of the form:
+
+```
+<prefix>/<filename>
+```
+
+For example, with prefix `export` and file `public.users.parquet`:
+
+```
+s3://my-bucket/export/public.users.parquet
+```
+
+### Progress Display
+
+```
+  ████████████████░░░░░░░░░░░░░░ | 53% | public.users.parquet
+  ██████████████████████████████ | 100% | Overall
+```
+
+### AWS Credentials
+
+AWS credentials can be configured in two ways:
+- During `init` (optional step after config creation)
+- Inline when first running the upload command
+
+Credentials are stored in `.pgtosnowflake/aws.json` with the secret access key encrypted using the same AES-256-GCM key as database passwords.
 
 ## Toggle Verbose
 

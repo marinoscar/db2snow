@@ -29,17 +29,20 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.992.0",
+    "@aws-sdk/lib-storage": "^3.992.0",
     "@duckdb/node-api": "1.4.4-r.1",
     "@inquirer/prompts": "^7.3.2",
     "boxen": "^8.0.1",
     "chalk": "^5.4.1",
+    "cli-progress": "^3.12.0",
     "cli-table3": "^0.6.5",
-    "commander": "^13.1.0",
     "figures": "^6.1.0",
     "ora": "^8.2.0",
     "pg": "^8.13.3"
   },
   "devDependencies": {
+    "@types/cli-progress": "^3.11.6",
     "@types/node": "^22.13.4",
     "@types/pg": "^8.11.11",
     "tsx": "^4.19.3",

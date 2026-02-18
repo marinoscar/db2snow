@@ -11,6 +11,7 @@ CLI tool for migrating PostgreSQL databases to Snowflake. Interactively map sche
 - **Interactive table selection** — choose specific schemas and tables to export during the export flow
 - **DDL generation** — generate Snowflake `CREATE SCHEMA`, `CREATE TABLE`, and `ALTER TABLE` statements with correct type mappings
 - **Encryption** — AES-256-GCM encryption for database passwords in mapping and connection files
+- **S3 upload** — upload exported Parquet/CSV files to an AWS S3 bucket with multipart upload and progress bars
 - **Logging** — file-based session logs for troubleshooting
 
 ## Prerequisites
@@ -18,6 +19,7 @@ CLI tool for migrating PostgreSQL databases to Snowflake. Interactively map sche
 - Node.js 20+
 - Access to a PostgreSQL database
 - (Optional) Snowflake account for deploying generated DDL
+- (Optional) AWS credentials with S3 access for uploading exported files
 
 ## Installation
 
@@ -56,6 +58,8 @@ pgtosnowflake
 4. Select **Export data** to export table data. Choose a mapping file, select which tables to export (all or specific), and DuckDB exports each table.
 
 5. Select **Generate Snowflake DDL** to create SQL scripts. Select a mapping and the tool writes a `.sql` file with `CREATE SCHEMA`, `CREATE TABLE`, primary keys, and foreign key constraints.
+
+6. Select **Upload to S3** to upload exported files to an AWS S3 bucket. Configure AWS credentials (or skip at init and configure inline), select files, and upload with progress tracking.
 
 ## Keyboard Shortcuts
 
@@ -119,6 +123,7 @@ The `.pgtosnowflake/` directory contains:
 ```
 .pgtosnowflake/
   key                  # AES-256-GCM encryption key (hex)
+  aws.json             # AWS credentials (secret key encrypted)
   mappings/            # Mapping JSON files
   connections/         # Saved connection files
   logs/                # Session log files
@@ -136,18 +141,19 @@ src/
   menu.ts                           # Interactive menu loop
   constants.ts                      # App-wide constants
   types/                            # TypeScript interfaces
-    config.ts, postgres.ts, mapping.ts, snowflake.ts, export.ts, connection.ts
+    config.ts, postgres.ts, mapping.ts, snowflake.ts, export.ts, connection.ts, aws.ts
   services/                         # Core business logic
     encryption.service.ts           # AES-256-GCM encrypt/decrypt
     config.service.ts               # Config directory + key management
     connection.service.ts           # Saved connection CRUD
+    aws.service.ts                  # AWS credentials + S3 upload
     postgres.service.ts             # PG connection + schema introspection
     mapping.service.ts              # Mapping file read/write
     type-mapper.service.ts          # PG -> Snowflake type mapping
     ddl-generator.service.ts        # Snowflake DDL generation
     duckdb-export.service.ts        # DuckDB-based Parquet/CSV export
   commands/                         # CLI command handlers
-    init.command.ts, map.command.ts, export.command.ts, generate-ddl.command.ts
+    init.command.ts, map.command.ts, export.command.ts, generate-ddl.command.ts, upload.command.ts
   ui/                               # Terminal UI (chalk, ora, boxen, cli-table3)
     theme.ts, spinner.ts, prompts.ts, logger.ts, display.ts
   utils/                            # Helpers

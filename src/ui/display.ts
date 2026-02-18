@@ -19,30 +19,12 @@ export function showBanner(): void {
 export function showStatusLine(initialized: boolean, activeMapping?: string): void {
   const initStatus = initialized
     ? `${theme.success('initialized')}`
-    : `${theme.warning('not initialized')} — run ${theme.command('init')} to set up`;
+    : `${theme.warning('not initialized')}`;
   const mappingStatus = activeMapping
     ? `${theme.value(activeMapping)}`
     : theme.muted('none');
 
   console.log(`  ${theme.label('Config:')} ${initStatus}  ${theme.label('Mapping:')} ${mappingStatus}`);
-  console.log();
-}
-
-export function showHelp(): void {
-  const commands = [
-    ['init', 'Set up encryption key and config directory'],
-    ['map', 'Connect to PostgreSQL and create a schema mapping'],
-    ['export', 'Export table data to Parquet or CSV via DuckDB'],
-    ['generate-ddl', 'Generate Snowflake DDL from a mapping file'],
-    ['help', 'Show this help message'],
-    ['verbose on|off', 'Toggle verbose logging'],
-    ['exit / quit', 'Exit the application'],
-  ];
-
-  console.log(theme.label('\n  Available commands:\n'));
-  for (const [cmd, desc] of commands) {
-    console.log(`    ${theme.command(cmd.padEnd(20))} ${desc}`);
-  }
   console.log();
 }
 
@@ -59,6 +41,11 @@ export function createTable(headers: string[]): Table.Table {
       middle: '│',
     },
   });
+}
+
+export function showLegend(): void {
+  console.log(`  ${theme.muted('ESC')} ${theme.dim('Back')}  ${theme.muted('|')}  ${theme.muted('Ctrl+C ×2')} ${theme.dim('Exit')}`);
+  console.log();
 }
 
 export function showSummaryTable(headers: string[], rows: string[][]): void {

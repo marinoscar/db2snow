@@ -1,9 +1,12 @@
 import type { ConfigLocation, KeyGenerationMethod } from '../types/config.js';
 import { generateRandomKey, deriveKeyFromPassphrase } from '../services/encryption.service.js';
 import { getConfigPaths, isInitialized, initializeConfig } from '../services/config.service.js';
-import { promptSelect, promptConfirm, promptPassword } from '../ui/prompts.js';
+import { saveAwsCredentials } from '../services/aws.service.js';
+import { DEFAULT_AWS_REGION } from '../constants.js';
+import { promptSelect, promptConfirm, promptPassword, promptInput } from '../ui/prompts.js';
 import { logSuccess, logWarning, logInfo, logStep, logBlank } from '../ui/logger.js';
 import { theme } from '../ui/theme.js';
+import { validateNonEmpty } from '../utils/validation.js';
 import { logInfo as fileLogInfo } from '../utils/log-file.js';
 
 export async function runInit(): Promise<void> {
@@ -63,13 +66,29 @@ export async function runInit(): Promise<void> {
   const paths = await initializeConfig(location, keyHex);
   await fileLogInfo('init', `Configuration initialized at ${paths.configDir}`);
 
+  // 5. Optional AWS credentials setup
+  logBlank();
+  const configureAws = await promptConfirm('Configure AWS credentials for S3 uploads?', false);
+  if (configureAws) {
+    const accessKeyId = await promptInput('AWS Access Key ID:', undefined, validateNonEmpty);
+    const secretAccessKey = await promptPassword('AWS Secret Access Key:');
+    if (!secretAccessKey) {
+      logWarning('Secret access key is required. Skipping AWS configuration.');
+    } else {
+      const region = await promptInput('AWS Region:', DEFAULT_AWS_REGION);
+      await saveAwsCredentials({ accessKeyId, secretAccessKey, region });
+      logSuccess('AWS credentials saved');
+    }
+  }
+
   logBlank();
   logSuccess(`Configuration initialized at ${theme.path(paths.configDir)}`);
-  logInfo(`  Key file: ${theme.path(paths.keyFile)}`);
-  logInfo(`  Mappings: ${theme.path(paths.mappingsDir)}`);
-  logInfo(`  Logs:     ${theme.path(paths.logsDir)}`);
+  logInfo(`  Key file:    ${theme.path(paths.keyFile)}`);
+  logInfo(`  Mappings:    ${theme.path(paths.mappingsDir)}`);
+  logInfo(`  Logs:        ${theme.path(paths.logsDir)}`);
+  logInfo(`  AWS creds:   ${theme.path(paths.awsCredentialsFile)}`);
 
-  // 5. Suggest .gitignore for local config
+  // 6. Suggest .gitignore for local config
   if (location === 'local') {
     logBlank();
     logWarning('Consider adding .pgtosnowflake/ to your .gitignore to keep your key safe.');

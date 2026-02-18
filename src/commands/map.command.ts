@@ -3,6 +3,7 @@ import type { MappingFile, MappingExportOptions } from '../types/mapping.js';
 import { MAPPING_FILE_VERSION, DEFAULT_PG_PORT, DEFAULT_EXPORT_FORMAT, DEFAULT_OUTPUT_DIR } from '../constants.js';
 import { isInitialized } from '../services/config.service.js';
 import { encryptPassword, saveMappingFile } from '../services/mapping.service.js';
+import { listConnections, loadConnection, decryptConnectionPassword, saveConnection } from '../services/connection.service.js';
 import * as pgService from '../services/postgres.service.js';
 import { promptInput, promptPassword, promptConfirm, promptSelect, promptCheckbox } from '../ui/prompts.js';
 import { startSpinner, succeedSpinner, failSpinner } from '../ui/spinner.js';
@@ -21,6 +22,68 @@ interface MapCommandOptions {
   ssl?: boolean;
 }
 
+async function gatherConnection(options: MapCommandOptions): Promise<PgConnectionConfig> {
+  // Check for saved connections
+  let savedNames: string[] = [];
+  try {
+    savedNames = await listConnections();
+  } catch {
+    // No connections directory yet — that's fine
+  }
+
+  if (savedNames.length > 0) {
+    const connectionChoice = await promptSelect<string>(
+      'Connection:',
+      [
+        { name: 'New connection', value: '__new__' },
+        ...savedNames.map((n) => ({ name: n, value: n })),
+      ],
+    );
+
+    if (connectionChoice !== '__new__') {
+      const saved = await loadConnection(connectionChoice);
+      const decryptedPassword = await decryptConnectionPassword(saved);
+
+      // Allow overriding the database
+      const database = await promptInput('Database name:', saved.database, validateNonEmpty);
+
+      return {
+        host: saved.host,
+        port: saved.port,
+        database,
+        user: saved.user,
+        password: decryptedPassword,
+        ssl: saved.ssl,
+      };
+    }
+  }
+
+  // New connection flow
+  const host = options.host || await promptInput('PostgreSQL host:', 'localhost', validateHostInput);
+  const portStr = options.port?.toString() || await promptInput('PostgreSQL port:', String(DEFAULT_PG_PORT), validatePortInput);
+  const port = parseInt(portStr, 10);
+  const database = options.database || await promptInput('Database name:', undefined, validateNonEmpty);
+  const user = options.user || await promptInput('Username:', 'postgres', validateNonEmpty);
+  const password = options.password || await promptPassword('Password:');
+  const ssl = options.ssl ?? await promptConfirm('Use SSL?', false);
+
+  return { host, port, database, user, password, ssl };
+}
+
+async function offerSaveConnection(config: PgConnectionConfig): Promise<void> {
+  try {
+    const shouldSave = await promptConfirm('Save this connection for future use?', false);
+    if (shouldSave) {
+      const connName = await promptInput('Connection name:', `${config.host}-${config.database}`, validateMappingName);
+      const filePath = await saveConnection(connName, config);
+      logSuccess(`Connection saved as ${theme.value(connName)}`);
+      logInfo(`  ${theme.path(filePath)}`);
+    }
+  } catch {
+    // If save fails (e.g. ESC or Ctrl+C), just continue silently
+  }
+}
+
 export async function runMap(options: MapCommandOptions = {}): Promise<void> {
   // 1. Verify init
   const initialized = await isInitialized();
@@ -33,26 +96,21 @@ export async function runMap(options: MapCommandOptions = {}): Promise<void> {
   logBlank();
 
   // 2. Gather connection details
-  const host = options.host || await promptInput('PostgreSQL host:', 'localhost', validateHostInput);
-  const portStr = options.port?.toString() || await promptInput('PostgreSQL port:', String(DEFAULT_PG_PORT), validatePortInput);
-  const port = parseInt(portStr, 10);
-  const database = options.database || await promptInput('Database name:', undefined, validateNonEmpty);
-  const user = options.user || await promptInput('Username:', 'postgres', validateNonEmpty);
-  const password = options.password || await promptPassword('Password:');
-  const ssl = options.ssl ?? await promptConfirm('Use SSL?', false);
-
-  const config: PgConnectionConfig = { host, port, database, user, password, ssl };
+  const config = await gatherConnection(options);
 
   // 3. Connect
-  startSpinner(`Connecting to ${host}:${port}/${database}...`);
+  startSpinner(`Connecting to ${config.host}:${config.port}/${config.database}...`);
   try {
     await pgService.connect(config);
-    succeedSpinner(`Connected to ${host}:${port}/${database}`);
+    succeedSpinner(`Connected to ${config.host}:${config.port}/${config.database}`);
   } catch (err) {
-    failSpinner(`Failed to connect to ${host}:${port}/${database}`);
+    failSpinner(`Failed to connect to ${config.host}:${config.port}/${config.database}`);
     if (err instanceof Error) logError(err.message);
     return;
   }
+
+  // 3b. Offer to save connection
+  await offerSaveConnection(config);
 
   try {
     // 4. List schemas
@@ -139,7 +197,7 @@ export async function runMap(options: MapCommandOptions = {}): Promise<void> {
     showSummaryTable(['Schema', 'Table', 'Columns', 'Primary Key', 'FKs'], summaryRows);
 
     // 8. Mapping name and export format
-    const mappingName = await promptInput('Mapping name:', database, validateMappingName);
+    const mappingName = await promptInput('Mapping name:', config.database, validateMappingName);
 
     const exportFormat = await promptSelect<'parquet' | 'csv'>(
       'Default export format:',
@@ -159,7 +217,7 @@ export async function runMap(options: MapCommandOptions = {}): Promise<void> {
     // 9. Encrypt password and save
     startSpinner('Saving mapping file...');
 
-    const encryptedPassword = await encryptPassword(password);
+    const encryptedPassword = await encryptPassword(config.password);
 
     const mapping: MappingFile = {
       version: MAPPING_FILE_VERSION,
@@ -167,12 +225,12 @@ export async function runMap(options: MapCommandOptions = {}): Promise<void> {
       createdAt: new Date().toISOString(),
       source: {
         connection: {
-          host,
-          port,
-          database,
-          user,
+          host: config.host,
+          port: config.port,
+          database: config.database,
+          user: config.user,
           password: encryptedPassword,
-          ssl,
+          ssl: config.ssl,
         },
       },
       selectedSchemas,
@@ -191,7 +249,7 @@ export async function runMap(options: MapCommandOptions = {}): Promise<void> {
     logBlank();
   } catch (err) {
     await fileLogError('map', 'Mapping failed', err instanceof Error ? err : undefined);
-    if (err instanceof Error) logError(err.message);
+    throw err;
   } finally {
     await pgService.disconnect();
   }

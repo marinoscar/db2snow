@@ -9,6 +9,10 @@ import {
   validateHostInput,
   validateNonEmpty,
   validateMappingName,
+  isValidS3BucketName,
+  validateS3BucketName,
+  isValidS3Prefix,
+  validateS3Prefix,
 } from '../../src/utils/validation.js';
 
 describe('validation', () => {
@@ -125,6 +129,77 @@ describe('validation', () => {
 
     it('should return error for invalid names', () => {
       expect(validateMappingName('my project')).toBeTypeOf('string');
+    });
+  });
+
+  describe('isValidS3BucketName', () => {
+    it('should accept valid bucket names', () => {
+      expect(isValidS3BucketName('my-bucket')).toBe(true);
+      expect(isValidS3BucketName('my.bucket.name')).toBe(true);
+      expect(isValidS3BucketName('abc')).toBe(true);
+      expect(isValidS3BucketName('a-bucket-with-63-chars-' + 'x'.repeat(40))).toBe(true);
+    });
+
+    it('should reject names shorter than 3 characters', () => {
+      expect(isValidS3BucketName('ab')).toBe(false);
+      expect(isValidS3BucketName('a')).toBe(false);
+      expect(isValidS3BucketName('')).toBe(false);
+    });
+
+    it('should reject names longer than 63 characters', () => {
+      expect(isValidS3BucketName('a'.repeat(64))).toBe(false);
+    });
+
+    it('should reject uppercase characters', () => {
+      expect(isValidS3BucketName('My-Bucket')).toBe(false);
+      expect(isValidS3BucketName('BUCKET')).toBe(false);
+    });
+
+    it('should reject consecutive dots', () => {
+      expect(isValidS3BucketName('my..bucket')).toBe(false);
+    });
+
+    it('should reject IP-formatted names', () => {
+      expect(isValidS3BucketName('192.168.1.1')).toBe(false);
+      expect(isValidS3BucketName('10.0.0.1')).toBe(false);
+    });
+  });
+
+  describe('validateS3BucketName', () => {
+    it('should return true for valid bucket names', () => {
+      expect(validateS3BucketName('my-bucket')).toBe(true);
+    });
+
+    it('should return error string for invalid bucket names', () => {
+      expect(validateS3BucketName('AB')).toBeTypeOf('string');
+    });
+  });
+
+  describe('isValidS3Prefix', () => {
+    it('should accept valid prefixes', () => {
+      expect(isValidS3Prefix('')).toBe(true);
+      expect(isValidS3Prefix('data')).toBe(true);
+      expect(isValidS3Prefix('data/exports')).toBe(true);
+      expect(isValidS3Prefix('data/exports/')).toBe(true);
+    });
+
+    it('should reject prefixes starting with /', () => {
+      expect(isValidS3Prefix('/data')).toBe(false);
+      expect(isValidS3Prefix('/data/exports')).toBe(false);
+    });
+
+    it('should reject prefixes with consecutive slashes', () => {
+      expect(isValidS3Prefix('data//exports')).toBe(false);
+    });
+  });
+
+  describe('validateS3Prefix', () => {
+    it('should return true for valid prefixes', () => {
+      expect(validateS3Prefix('data/exports')).toBe(true);
+    });
+
+    it('should return error string for invalid prefixes', () => {
+      expect(validateS3Prefix('/data')).toBeTypeOf('string');
     });
   });
 });

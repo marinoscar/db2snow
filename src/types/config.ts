@@ -9,8 +9,10 @@ export interface EncryptedPayload {
 export interface ConfigPaths {
   configDir: string;
   mappingsDir: string;
+  connectionsDir: string;
   logsDir: string;
   keyFile: string;
+  awsCredentialsFile: string;
 }
 
 export type ConfigLocation = 'local' | 'global';

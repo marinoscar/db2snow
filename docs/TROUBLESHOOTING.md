@@ -103,6 +103,43 @@ Failed to load connection: <name>
 
 If the `connections/` directory doesn't exist (older config), it will be created automatically when you first save a connection. You can also re-run **Initialize config** to create the directory.
 
+### AWS credentials not configured
+
+```
+AWS credentials not configured.
+```
+
+AWS credentials are optional and can be configured in two ways:
+- During init: answer "Yes" when asked to configure AWS credentials
+- During upload: the upload command will offer to configure credentials inline
+
+### S3 bucket not found or access denied
+
+```
+Bucket "my-bucket" not found or access denied
+```
+
+- Verify the bucket name is correct
+- Ensure your AWS credentials have `s3:HeadBucket` and `s3:PutObject` permissions
+- Check the bucket's region matches the region in your AWS credentials
+- Verify the bucket exists in the AWS Console
+
+### S3 upload timeout
+
+If uploads are timing out for large files:
+- Check your network connection
+- The tool uses multipart uploads (via `@aws-sdk/lib-storage`) for files >5MB
+- Monitor progress bars — if progress stalls, press Ctrl+C and retry
+- Check `.pgtosnowflake/logs/` for detailed error messages
+
+### AWS credential decryption failed
+
+```
+Failed to decrypt AWS credentials. Check your encryption key.
+```
+
+The encryption key in `.pgtosnowflake/key` must match the key used when AWS credentials were saved. If you regenerated the key with init, you'll need to reconfigure AWS credentials.
+
 ### ESC key not working
 
 The ESC key sends the `escape` keypress event to go back. If ESC is not responding:

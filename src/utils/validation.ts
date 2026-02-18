@@ -53,3 +53,34 @@ export function validateMappingName(input: string): string | true {
   }
   return true;
 }
+
+export function isValidS3BucketName(name: string): boolean {
+  if (!name || name.length < 3 || name.length > 63) return false;
+  // Must be lowercase alphanumeric, hyphens, and dots only
+  if (!/^[a-z0-9][a-z0-9.\-]*[a-z0-9]$/.test(name)) return false;
+  // No consecutive dots
+  if (/\.\./.test(name)) return false;
+  // Must not be formatted as an IP address
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(name)) return false;
+  return true;
+}
+
+export function validateS3BucketName(input: string): string | true {
+  if (!isValidS3BucketName(input)) {
+    return 'Bucket name must be 3-63 characters, lowercase alphanumeric/hyphens/dots, not an IP address';
+  }
+  return true;
+}
+
+export function isValidS3Prefix(prefix: string): boolean {
+  if (prefix.startsWith('/')) return false;
+  if (prefix.includes('//')) return false;
+  return true;
+}
+
+export function validateS3Prefix(input: string): string | true {
+  if (!isValidS3Prefix(input)) {
+    return 'S3 prefix must not start with "/" or contain "//"';
+  }
+  return true;
+}

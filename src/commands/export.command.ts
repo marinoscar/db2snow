@@ -3,7 +3,7 @@ import type { ExportFormat, ExportSummary } from '../types/export.js';
 import { isInitialized } from '../services/config.service.js';
 import { listMappingFiles, loadMappingFile, loadMappingFileByPath, decryptPassword, getConnectionFromMapping } from '../services/mapping.service.js';
 import { exportTables } from '../services/duckdb-export.service.js';
-import { promptSelect } from '../ui/prompts.js';
+import { promptSelect, promptCheckbox } from '../ui/prompts.js';
 import { startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../ui/spinner.js';
 import { logSuccess, logError, logWarning, logInfo, logStep, logBlank } from '../ui/logger.js';
 import { showSummaryTable } from '../ui/display.js';
@@ -16,6 +16,46 @@ interface ExportCommandOptions {
   tables?: string;
   format?: ExportFormat;
   outputDir?: string;
+}
+
+async function selectTablesInteractively(
+  tables: { schemaName: string; tableName: string }[],
+): Promise<{ schemaName: string; tableName: string }[]> {
+  // Group tables by schema
+  const bySchema = new Map<string, string[]>();
+  for (const t of tables) {
+    const existing = bySchema.get(t.schemaName) || [];
+    existing.push(t.tableName);
+    bySchema.set(t.schemaName, existing);
+  }
+
+  const selected: { schemaName: string; tableName: string }[] = [];
+
+  for (const [schemaName, tableNames] of bySchema) {
+    const choice = await promptSelect<string>(
+      `Tables from ${schemaName}:`,
+      [
+        { name: `All ${tableNames.length} tables`, value: '__all__' },
+        { name: 'Select specific tables...', value: '__pick__' },
+      ],
+    );
+
+    if (choice === '__all__') {
+      for (const tableName of tableNames) {
+        selected.push({ schemaName, tableName });
+      }
+    } else {
+      const picked = await promptCheckbox(
+        `Select tables from ${schemaName}:`,
+        tableNames.map((t) => ({ name: t, value: t, checked: true })),
+      );
+      for (const tableName of picked) {
+        selected.push({ schemaName, tableName });
+      }
+    }
+  }
+
+  return selected;
 }
 
 export async function runExport(options: ExportCommandOptions = {}): Promise<void> {
@@ -69,19 +109,30 @@ export async function runExport(options: ExportCommandOptions = {}): Promise<voi
   const pgConfig = getConnectionFromMapping(mapping, decryptedPassword);
 
   // 4. Determine tables to export
-  let tablesToExport = mapping.tables.map((t) => ({
+  const allTables = mapping.tables.map((t) => ({
     schemaName: t.schemaName,
     tableName: t.tableName,
   }));
 
+  let tablesToExport: { schemaName: string; tableName: string }[];
+
   if (options.tables) {
+    // CLI override — filter by provided names
     const filterNames = options.tables.split(',').map((t) => t.trim());
-    tablesToExport = tablesToExport.filter((t) =>
+    tablesToExport = allTables.filter((t) =>
       filterNames.includes(t.tableName) || filterNames.includes(`${t.schemaName}.${t.tableName}`),
     );
 
     if (tablesToExport.length === 0) {
       logWarning('No matching tables found for the specified filter.');
+      return;
+    }
+  } else {
+    // Interactive table selection
+    tablesToExport = await selectTablesInteractively(allTables);
+
+    if (tablesToExport.length === 0) {
+      logWarning('No tables selected. Aborting.');
       return;
     }
   }

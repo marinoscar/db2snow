@@ -1,6 +1,6 @@
 import path from 'node:path';
 import os from 'node:os';
-import { CONFIG_DIR_NAME, MAPPINGS_DIR_NAME, LOGS_DIR_NAME, KEY_FILE_NAME } from '../constants.js';
+import { CONFIG_DIR_NAME, MAPPINGS_DIR_NAME, CONNECTIONS_DIR_NAME, LOGS_DIR_NAME, KEY_FILE_NAME, AWS_CREDENTIALS_FILE_NAME } from '../constants.js';
 import type { ConfigLocation, ConfigPaths } from '../types/config.js';
 import { ConfigNotFoundError } from '../utils/error.js';
 import { dirExists, fileExists, ensureDir, readTextFile, writeTextFile } from '../utils/file.js';
@@ -17,8 +17,10 @@ function buildPaths(configDir: string): ConfigPaths {
   return {
     configDir,
     mappingsDir: path.join(configDir, MAPPINGS_DIR_NAME),
+    connectionsDir: path.join(configDir, CONNECTIONS_DIR_NAME),
     logsDir: path.join(configDir, LOGS_DIR_NAME),
     keyFile: path.join(configDir, KEY_FILE_NAME),
+    awsCredentialsFile: path.join(configDir, AWS_CREDENTIALS_FILE_NAME),
   };
 }
 
@@ -67,6 +69,7 @@ export async function initializeConfig(location: ConfigLocation, keyHex: string)
 
   await ensureDir(paths.configDir);
   await ensureDir(paths.mappingsDir);
+  await ensureDir(paths.connectionsDir);
   await ensureDir(paths.logsDir);
   await writeTextFile(paths.keyFile, keyHex);
 

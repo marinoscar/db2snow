@@ -4,11 +4,13 @@ CLI tool for migrating PostgreSQL databases to Snowflake. Interactively map sche
 
 ## Features
 
-- **Interactive REPL** — run `pgtosnowflake` and use commands in a persistent session
+- **Interactive menu** — run `pgtosnowflake` and navigate actions with arrow keys or number selection
 - **Schema mapping** — connect to PostgreSQL, browse schemas/tables, save encrypted mapping files
+- **Saved connections** — save and reuse PostgreSQL connection details across sessions
 - **Data export** — export tables to Parquet (ZSTD compressed) or CSV using DuckDB's PostgreSQL extension
+- **Interactive table selection** — choose specific schemas and tables to export during the export flow
 - **DDL generation** — generate Snowflake `CREATE SCHEMA`, `CREATE TABLE`, and `ALTER TABLE` statements with correct type mappings
-- **Encryption** — AES-256-GCM encryption for database passwords in mapping files
+- **Encryption** — AES-256-GCM encryption for database passwords in mapping and connection files
 - **Logging** — file-based session logs for troubleshooting
 
 ## Prerequisites
@@ -41,91 +43,47 @@ pgtosnowflake
 
 ## Quick Start
 
-1. Launch the interactive REPL:
+1. Launch the interactive menu:
 
    ```bash
    pgtosnowflake
    ```
 
-2. Initialize encryption config:
+2. Select **Initialize config** to set up encryption. Choose local (project) or global (home directory) config, then auto-generate a key or enter a passphrase.
 
-   ```
-   pg2sf > init
-   ```
+3. Select **Map PostgreSQL schema** to connect to a database. You can pick a saved connection or enter new details. After connecting, select schemas and tables. The mapping (with encrypted password) is saved to `.pgtosnowflake/mappings/`.
 
-   Choose local (project) or global (home directory) config, then auto-generate a key or enter a passphrase.
+4. Select **Export data** to export table data. Choose a mapping file, select which tables to export (all or specific), and DuckDB exports each table.
 
-3. Map a PostgreSQL database:
+5. Select **Generate Snowflake DDL** to create SQL scripts. Select a mapping and the tool writes a `.sql` file with `CREATE SCHEMA`, `CREATE TABLE`, primary keys, and foreign key constraints.
 
-   ```
-   pg2sf > map
-   ```
+## Keyboard Shortcuts
 
-   Enter connection details, select schemas and tables. The mapping (with encrypted password) is saved to `.pgtosnowflake/mappings/`.
+| Key | Context | Action |
+|-----|---------|--------|
+| `ESC` | Any prompt | Go back to the previous level / main menu |
+| `Ctrl+C` | Sub-command | Cancel current action, return to menu |
+| `Ctrl+C` ×2 | Main menu | Exit the application (press twice within 2 seconds) |
+| Arrow keys | Menu / list | Navigate options |
+| Enter | Menu / list | Select option |
 
-4. Export data:
+## Saved Connections
 
-   ```
-   pg2sf > export
-   ```
+When mapping a PostgreSQL schema, the tool checks for saved connections:
 
-   Select a mapping file, choose Parquet or CSV, and DuckDB exports each table.
+- If saved connections exist, you can pick one or create a new connection
+- Saved connections store host, port, database, user, encrypted password, and SSL settings
+- After successfully connecting with new credentials, you'll be prompted to save the connection
+- Connection files are stored in `.pgtosnowflake/connections/`
 
-5. Generate Snowflake DDL:
+## CLI Options
 
-   ```
-   pg2sf > generate-ddl
-   ```
+| Option | Description |
+|--------|-------------|
+| `--version`, `-V` | Show version |
+| `--help`, `-h` | Show help |
 
-   Select a mapping and the tool writes a `.sql` file with `CREATE SCHEMA`, `CREATE TABLE`, primary keys, and foreign key constraints.
-
-## Subcommand Usage
-
-All commands can also be run directly from the shell:
-
-```bash
-pgtosnowflake init
-pgtosnowflake map --host localhost --port 5432 --database mydb --user postgres
-pgtosnowflake export --mapping my-project --format parquet
-pgtosnowflake generate-ddl --mapping my-project --output snowflake.sql
-pgtosnowflake generate-ddl --mapping my-project --preview
-```
-
-### Global Flags
-
-| Flag | Description |
-|------|-------------|
-| `--verbose` | Enable debug-level logging to console |
-| `--version` | Show version |
-| `--help` | Show help |
-
-### `map` Flags
-
-| Flag | Description |
-|------|-------------|
-| `-H, --host <host>` | PostgreSQL host |
-| `-p, --port <port>` | PostgreSQL port |
-| `-d, --database <db>` | Database name |
-| `-U, --user <user>` | Username |
-| `-W, --password <pw>` | Password |
-| `-s, --ssl` | Use SSL |
-
-### `export` Flags
-
-| Flag | Description |
-|------|-------------|
-| `-m, --mapping <name>` | Mapping file name or path |
-| `-t, --tables <list>` | Comma-separated table filter |
-| `-f, --format <fmt>` | `parquet` or `csv` |
-| `-o, --output-dir <dir>` | Output directory |
-
-### `generate-ddl` Flags
-
-| Flag | Description |
-|------|-------------|
-| `-m, --mapping <name>` | Mapping file name or path |
-| `-o, --output <file>` | Output SQL file path |
-| `--preview` | Print DDL to stdout |
+Running `pgtosnowflake` with no arguments launches the interactive menu.
 
 ## Type Mapping
 
@@ -162,6 +120,7 @@ The `.pgtosnowflake/` directory contains:
 .pgtosnowflake/
   key                  # AES-256-GCM encryption key (hex)
   mappings/            # Mapping JSON files
+  connections/         # Saved connection files
   logs/                # Session log files
 ```
 
@@ -173,14 +132,15 @@ Config is resolved in order: local (`./.pgtosnowflake/`) then global (`~/.pgtosn
 
 ```
 src/
-  index.ts                          # Entry point (CLI + REPL)
-  repl.ts                           # Interactive REPL session
+  index.ts                          # Entry point (--version, --help, launches menu)
+  menu.ts                           # Interactive menu loop
   constants.ts                      # App-wide constants
   types/                            # TypeScript interfaces
-    config.ts, postgres.ts, mapping.ts, snowflake.ts, export.ts
+    config.ts, postgres.ts, mapping.ts, snowflake.ts, export.ts, connection.ts
   services/                         # Core business logic
     encryption.service.ts           # AES-256-GCM encrypt/decrypt
     config.service.ts               # Config directory + key management
+    connection.service.ts           # Saved connection CRUD
     postgres.service.ts             # PG connection + schema introspection
     mapping.service.ts              # Mapping file read/write
     type-mapper.service.ts          # PG -> Snowflake type mapping
@@ -204,7 +164,7 @@ docs/
 ## Troubleshooting
 
 - **Log files**: check `.pgtosnowflake/logs/` for detailed session logs
-- **Verbose mode**: pass `--verbose` or type `verbose on` in the REPL
+- **Verbose mode**: select **Toggle verbose** from the menu to enable debug-level console output
 - **Connection issues**: verify host, port, and credentials; check PostgreSQL `pg_hba.conf` for client access
 - **DuckDB errors**: ensure the `@duckdb/node-api` package installed correctly for your platform
 - **Encryption key errors**: make sure `.pgtosnowflake/key` exists and matches the key used when mapping was created
